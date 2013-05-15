@@ -37,12 +37,19 @@ KeepAliveAgent.prototype.freeHandler = function(socket, host, port, localAddress
 	// If the socket is still useful, return it to the idle pool.
 	if (this.isSocketUsable(socket))
 	{
-		socket._requestCount = socket._requestCount ? socket._requestCount + 1 : 1;
+    if (this.isSocketExpired(socket))
+    {
+      socket.destroy();
+    }
+    else
+    {
+		  socket._requestCount = socket._requestCount ? socket._requestCount + 1 : 1;
 
-		if (!this.idleSockets[name])
-			this.idleSockets[name] = [];
+		  if (!this.idleSockets[name])
+			  this.idleSockets[name] = [];
 
-		this.idleSockets[name].push(socket);
+		  this.idleSockets[name].push(socket);
+    }
 	}
 
 	// If we had any pending requests for this name, send the next one off now.
@@ -76,10 +83,17 @@ KeepAliveAgent.prototype.nextIdleSocket = function(name)
 	var socket;
 	while(socket = this.idleSockets[name].shift())
 	{
-		// Check that this socket is still healthy after sitting around on the shelf.
-		// This check is the reason this module exists.
-		if (this.isSocketUsable(socket))
-			return socket;
+    if (this.isSocketExpired(socket))
+    {
+      socket.destroy();
+    }
+    else
+    {
+		  // Check that this socket is still healthy after sitting around on the shelf.
+		  // This check is the reason this module exists.
+		  if (this.isSocketUsable(socket))
+			  return socket;
+    }
 	}
 
 	return null;
@@ -90,6 +104,13 @@ KeepAliveAgent.prototype.isSocketUsable = function(socket)
 	return !socket.destroyed;
 };
 
+// This is the responsability of the application using the Keep alive agent to set
+// the expireTime attribute. e.g. with the timeout parameter value of the Keep-Alive
+// HTTP header
+KeepAliveAgent.prototype.isSocketExpired = function(socket)
+{
+	return !!(socket.expireTime && (socket.expireTime <= Date.now()));
+};
 
 KeepAliveAgent.prototype.removeSocket = function(socket, name, host, port, localAddress)
 {

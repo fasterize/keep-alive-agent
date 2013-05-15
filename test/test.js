@@ -127,6 +127,23 @@ describe('KeepAliveAgent', function()
 		});
 	});
 
+	it('does not return expired sockets to the idle pool and it destroys connection', function(done)
+	{
+		var agent = new KeepAliveAgent();
+		makeTestRequest(agent, function(response)
+		{
+			response.connection.expireTime = Date.now() - 1;
+
+			process.nextTick(function()
+			{
+				var name = serverConfig.hostname + ':' + serverConfig.port;
+				agent.idleSockets.should.not.have.property(name);
+        response.connection.destroyed.should.be.true;
+				done();
+			});
+		});
+	});
+
 	it('does not attempt to use destroyed sockets from the idle list', function()
 	{
 		var agent = new KeepAliveAgent();
@@ -142,6 +159,25 @@ describe('KeepAliveAgent', function()
 		assert.equal(socket, null);
 		assert.equal(agent.idleSockets[name].length, 0);
 	});
+
+	it('does not attempt to use destroyed sockets from the idle list', function()
+  {
+    var agent = new KeepAliveAgent();
+    var name = serverConfig.hostname + ':' + serverConfig.port;
+    var destroyed = 0;
+    var destroy = function() { destroyed++; };
+
+    agent.idleSockets[name] = [];
+    agent.idleSockets[name].push({ expireTime: Date.now() - 1, destroy: destroy });
+    agent.idleSockets[name].push({ expireTime: Date.now() - 1, destroy: destroy });
+    agent.idleSockets[name].push({ expireTime: Date.now() - 1, destroy: destroy });
+    agent.idleSockets[name].push({ expireTime: Date.now() - 1, destroy: destroy });
+
+    var socket = agent.nextIdleSocket(name);
+    assert.equal(socket, null);
+    assert.equal(agent.idleSockets[name].length, 0);
+    destroyed.should.equal(4);
+  });
 
 	it('reuses a good socket until it is destroyed', function(done)
 	{
